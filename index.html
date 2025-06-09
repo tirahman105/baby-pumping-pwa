@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="icon-192.png" />
+    <meta name="theme-color" content="#3b82f6" />
+    <title>Editable Baby Pumping To-Do with Edit Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("service-worker.js").then(
+          (reg) => console.log("Service Worker registered ✅", reg),
+          (err) => console.error("Service Worker failed ❌", err)
+        );
+      });
+    }
+  </script>
+
+  <body
+    class="bg-blue-50 min-h-screen flex flex-col items-center justify-center p-4"
+  >
+    <div class="bg-white w-full max-w-md rounded-xl shadow-lg p-6">
+      <h1 class="text-xl font-bold text-blue-600 text-center mb-6">
+        🍼 Daily Pumping Checklist
+      </h1>
+
+      <ul id="taskList" class="space-y-4 max-h-[360px] overflow-y-auto"></ul>
+
+      <div class="mt-6">
+        <div class="text-gray-700 mb-1 font-semibold">
+          Total Pumped Amount: <span id="totalAmount">0 ml / 0.0 oz</span>
+        </div>
+        <div class="w-full bg-gray-300 rounded-full h-4 overflow-hidden">
+          <div
+            id="progressBar"
+            class="bg-blue-500 h-4 rounded-full transition-all duration-500"
+            style="width: 0%"
+          ></div>
+        </div>
+      </div>
+
+      <button
+        id="resetBtn"
+        class="mt-6 w-full bg-red-500 text-white py-2 rounded hover:bg-red-600"
+      >
+        Reset Checklist
+      </button>
+    </div>
+
+    <script>
+      // Default tasks data
+      const defaultTasks = [
+        { time: "6:00 AM", amountMl: 130 },
+        { time: "9:00 AM", amountMl: 130 },
+        { time: "12:00 PM", amountMl: 130 },
+        { time: "3:00 PM", amountMl: 130 },
+        { time: "6:00 PM", amountMl: 130 },
+        { time: "9:00 PM", amountMl: 130 },
+        { time: "2:00 AM (Optional)", amountMl: 100 },
+      ];
+
+      const maxTotalMl = 850; // Target max for progress bar 100%
+
+      const taskList = document.getElementById("taskList");
+      const totalAmountEl = document.getElementById("totalAmount");
+      const progressBar = document.getElementById("progressBar");
+      const resetBtn = document.getElementById("resetBtn");
+
+      // Load tasks and state from localStorage or defaults
+      function loadTasks() {
+        taskList.innerHTML = "";
+        const savedTasks =
+          JSON.parse(localStorage.getItem("tasks")) || defaultTasks;
+        const checkedState =
+          JSON.parse(localStorage.getItem("taskChecked")) || {};
+        const editState = JSON.parse(localStorage.getItem("taskEdit")) || {};
+
+        savedTasks.forEach((task, index) => {
+          const li = document.createElement("li");
+          li.className = "flex flex-col bg-gray-100 p-4 rounded";
+
+          // Top row: checkbox, time display/input, Edit button
+          const topRow = document.createElement("div");
+          topRow.className = "flex items-center gap-3";
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = checkedState[index] || false;
+          checkbox.className = "w-5 h-5 cursor-pointer";
+          checkbox.onchange = () => {
+            checkedState[index] = checkbox.checked;
+            localStorage.setItem("taskChecked", JSON.stringify(checkedState));
+            updateTotal();
+          };
+
+          // Time display/input container
+          const timeContainer = document.createElement("div");
+          timeContainer.className = "flex items-center gap-1 flex-1";
+
+          // Amount display/input container
+          const amountContainer = document.createElement("div");
+          amountContainer.className =
+            "flex items-center gap-2 justify-end min-w-[140px]";
+
+          // Edit button
+          const editBtn = document.createElement("button");
+          editBtn.className =
+            "ml-2 px-2 py-1 text-xs bg-blue-400 text-white rounded hover:bg-blue-600";
+          editBtn.textContent = editState[index] ? "Save" : "Edit";
+
+          // Time element (text or input)
+          let timeElem;
+          if (editState[index]) {
+            timeElem = document.createElement("input");
+            timeElem.type = "text";
+            timeElem.value = task.time;
+            timeElem.className =
+              "border border-gray-400 rounded px-2 py-1 w-full text-sm";
+            timeElem.oninput = () => {
+              task.time = timeElem.value;
+              saveTasksToStorage(savedTasks);
+            };
+          } else {
+            timeElem = document.createElement("span");
+            timeElem.textContent = task.time;
+            timeElem.className = "text-gray-800";
+          }
+          timeContainer.appendChild(timeElem);
+
+          // Amount element (text or input)
+          let amountElem;
+          if (editState[index]) {
+            amountElem = document.createElement("input");
+            amountElem.type = "number";
+            amountElem.min = "0";
+            amountElem.value = task.amountMl;
+            amountElem.className =
+              "border border-gray-400 rounded px-2 py-1 w-20 text-sm text-right";
+            amountElem.oninput = () => {
+              const oldVal = task.amountMl;
+              const newVal = parseInt(amountElem.value) || 0;
+              if (checkedState[index]) {
+                // Adjust total with diff
+                const diff = newVal - oldVal;
+                task.amountMl = newVal;
+                saveTasksToStorage(savedTasks);
+                updateTotal(diff, index);
+              } else {
+                task.amountMl = newVal;
+                saveTasksToStorage(savedTasks);
+              }
+            };
+          } else {
+            amountElem = document.createElement("span");
+            amountElem.textContent = `${task.amountMl} ml / ${mlToOz(
+              task.amountMl
+            )} oz`;
+            amountElem.className = "text-gray-800 text-right w-40 block";
+          }
+          amountContainer.appendChild(amountElem);
+
+          // Edit button click toggles edit mode
+          editBtn.onclick = () => {
+            editState[index] = !editState[index];
+            localStorage.setItem("taskEdit", JSON.stringify(editState));
+            loadTasks();
+          };
+
+          topRow.append(checkbox, timeContainer, editBtn);
+          li.append(topRow);
+          li.append(amountContainer);
+          taskList.appendChild(li);
+        });
+
+        updateTotal();
+      }
+
+      // Save tasks to localStorage
+      function saveTasksToStorage(tasks) {
+        localStorage.setItem("tasks", JSON.stringify(tasks));
+      }
+
+      // Convert ml to oz rounded to 1 decimal
+      function mlToOz(ml) {
+        return (ml * 0.033814).toFixed(1);
+      }
+
+      // Update total pumped amount; diff used for optimization (optional)
+      function updateTotal(diff = null, changedIndex = null) {
+        const tasks = JSON.parse(localStorage.getItem("tasks")) || defaultTasks;
+        const checkedState =
+          JSON.parse(localStorage.getItem("taskChecked")) || {};
+
+        // If diff is passed, adjust total by diff
+        if (diff !== null && changedIndex !== null) {
+          let currentTotal =
+            parseInt(localStorage.getItem("totalAmountMl")) || 0;
+          currentTotal += diff;
+          if (currentTotal < 0) currentTotal = 0;
+          localStorage.setItem("totalAmountMl", currentTotal);
+          displayTotal(currentTotal);
+          return;
+        }
+
+        // Else recalc total from scratch
+        let totalMl = 0;
+        tasks.forEach((task, i) => {
+          if (checkedState[i]) totalMl += task.amountMl || 0;
+        });
+        localStorage.setItem("totalAmountMl", totalMl);
+        displayTotal(totalMl);
+      }
+
+      function displayTotal(totalMl) {
+        totalAmountEl.textContent = `${totalMl} ml / ${mlToOz(totalMl)} oz`;
+        let percent = (totalMl / maxTotalMl) * 100;
+        if (percent > 100) percent = 100;
+        progressBar.style.width = percent + "%";
+      }
+
+      // Reset all to default and clear checks and edits
+      resetBtn.addEventListener("click", () => {
+        localStorage.removeItem("tasks");
+        localStorage.removeItem("taskChecked");
+        localStorage.removeItem("taskEdit");
+        localStorage.removeItem("totalAmountMl");
+        loadTasks();
+      });
+
+      // Initial load
+      loadTasks();
+    </script>
+  </body>
+</html>
