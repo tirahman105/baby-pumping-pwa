@@ -19,14 +19,60 @@
       });
     }
   </script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const birthDate = new Date(2025, 2, 8); // Note: Month is 0-indexed. 2 = March
+
+      function calculateAge() {
+        const today = new Date();
+        let months =
+          (today.getFullYear() - birthDate.getFullYear()) * 12 +
+          (today.getMonth() - birthDate.getMonth());
+
+        let days = today.getDate() - birthDate.getDate();
+        if (days < 0) {
+          months--;
+          const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+          days += prevMonth.getDate();
+        }
+
+        return { months, days };
+      }
+
+      const age = calculateAge();
+      const ageText = `🎂 Age: ${age.months} month${
+        age.months !== 1 ? "s" : ""
+      } ${age.days} day${age.days !== 1 ? "s" : ""}`;
+      document.getElementById("baby-age").textContent = ageText;
+    });
+  </script>
 
   <body
     class="bg-blue-50 min-h-screen flex flex-col items-center justify-center p-4"
   >
     <div class="bg-white w-full max-w-md rounded-xl shadow-lg p-6">
       <h1 class="text-xl font-bold text-blue-600 text-center mb-6">
-        🍼 Daily Pumping Checklist
+        🍼 Abdullah Tahmid Feeding
       </h1>
+      <p id="baby-age" class="text-center text-gray-700 text-sm mb-6">Age</p>
+      <div class="text-center text-gray-700 text-sm mb-1">
+        🏋️ Weight:
+        <span id="weight-display">--</span> kg
+        <input
+          id="baby-weight"
+          type="number"
+          step="0.1"
+          min="0"
+          class="border-b-2 border-blue-400 bg-transparent w-20 text-center outline-none focus:border-blue-600 hidden"
+          placeholder="KG"
+        />
+        <button
+          id="edit-weight-btn"
+          class="ml-2 text-blue-600 underline text-xs"
+        >
+          ✏️
+        </button>
+      </div>
 
       <ul id="taskList" class="space-y-4 max-h-[360px] overflow-y-auto"></ul>
 
@@ -179,10 +225,41 @@
         updateTotal();
       }
 
-      // Save tasks to localStorage
-      function saveTasksToStorage(tasks) {
-        localStorage.setItem("tasks", JSON.stringify(tasks));
+      ////weight code starts here
+
+      const weightInput = document.getElementById("baby-weight");
+      const weightDisplay = document.getElementById("weight-display");
+      const editWeightBtn = document.getElementById("edit-weight-btn");
+
+      // Load saved weight
+      let savedWeight = localStorage.getItem("babyWeight");
+      if (savedWeight) {
+        weightDisplay.textContent = savedWeight;
+        weightInput.value = savedWeight;
       }
+
+      // Toggle edit mode
+      editWeightBtn.addEventListener("click", () => {
+        if (weightInput.classList.contains("hidden")) {
+          // Enter edit mode
+          weightInput.classList.remove("hidden");
+          weightDisplay.classList.add("hidden");
+          editWeightBtn.innerHTML = "💾";
+          editWeightBtn.title = "Save";
+          weightInput.focus();
+        } else {
+          // Save and exit edit mode
+          const newWeight = weightInput.value;
+          localStorage.setItem("babyWeight", newWeight);
+          weightDisplay.textContent = newWeight;
+          weightInput.classList.add("hidden");
+          weightDisplay.classList.remove("hidden");
+          editWeightBtn.innerHTML = "✏️";
+          editWeightBtn.title = "Edit";
+        }
+      });
+
+      ////weight code ends here
 
       // Convert ml to oz rounded to 1 decimal
       function mlToOz(ml) {
