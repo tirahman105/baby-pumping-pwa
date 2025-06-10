@@ -9,44 +9,6 @@
     <title>Editable Baby Pumping To-Do with Edit Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <script>
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("service-worker.js").then(
-          (reg) => console.log("Service Worker registered ✅", reg),
-          (err) => console.error("Service Worker failed ❌", err)
-        );
-      });
-    }
-  </script>
-  <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      const birthDate = new Date(2025, 2, 8); // Note: Month is 0-indexed. 2 = March
-
-      function calculateAge() {
-        const today = new Date();
-        let months =
-          (today.getFullYear() - birthDate.getFullYear()) * 12 +
-          (today.getMonth() - birthDate.getMonth());
-
-        let days = today.getDate() - birthDate.getDate();
-        if (days < 0) {
-          months--;
-          const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-          days += prevMonth.getDate();
-        }
-
-        return { months, days };
-      }
-
-      const age = calculateAge();
-      const ageText = `🎂 Age: ${age.months} month${
-        age.months !== 1 ? "s" : ""
-      } ${age.days} day${age.days !== 1 ? "s" : ""}`;
-      document.getElementById("baby-age").textContent = ageText;
-    });
-  </script>
-
   <body
     class="bg-blue-50 min-h-screen flex flex-col items-center justify-center p-4"
   >
@@ -98,7 +60,42 @@
     </div>
 
     <script>
-      // Default tasks data
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("service-worker.js")
+            .then((reg) => console.log("Service Worker registered ✅", reg))
+            .catch((err) => console.error("Service Worker failed ❌", err));
+        });
+      }
+
+      // Baby birth date
+      document.addEventListener("DOMContentLoaded", function () {
+        const birthDate = new Date(2025, 2, 8); // 2 = March
+        function calculateAge() {
+          const today = new Date();
+          let months =
+            (today.getFullYear() - birthDate.getFullYear()) * 12 +
+            (today.getMonth() - birthDate.getMonth());
+          let days = today.getDate() - birthDate.getDate();
+          if (days < 0) {
+            months--;
+            const prevMonth = new Date(
+              today.getFullYear(),
+              today.getMonth(),
+              0
+            );
+            days += prevMonth.getDate();
+          }
+          return { months, days };
+        }
+        const age = calculateAge();
+        document.getElementById("baby-age").textContent =
+          `🎂 Age: ${age.months} month${age.months !== 1 ? "s" : ""} ` +
+          `${age.days} day${age.days !== 1 ? "s" : ""}`;
+      });
+
+      // Default tasks
       const defaultTasks = [
         { time: "6:00 AM", amountMl: 130 },
         { time: "9:00 AM", amountMl: 130 },
@@ -108,15 +105,21 @@
         { time: "9:00 PM", amountMl: 130 },
         { time: "2:00 AM (Optional)", amountMl: 100 },
       ];
-
-      const maxTotalMl = 850; // Target max for progress bar 100%
+      const maxTotalMl = 850;
 
       const taskList = document.getElementById("taskList");
       const totalAmountEl = document.getElementById("totalAmount");
       const progressBar = document.getElementById("progressBar");
       const resetBtn = document.getElementById("resetBtn");
+      const weightInput = document.getElementById("baby-weight");
+      const weightDisplay = document.getElementById("weight-display");
+      const editWeightBtn = document.getElementById("edit-weight-btn");
 
-      // Load tasks and state from localStorage or defaults
+      // Load and save helpers
+      function saveTasksToStorage(tasks) {
+        localStorage.setItem("tasks", JSON.stringify(tasks));
+      }
+
       function loadTasks() {
         taskList.innerHTML = "";
         const savedTasks =
@@ -125,62 +128,92 @@
           JSON.parse(localStorage.getItem("taskChecked")) || {};
         const editState = JSON.parse(localStorage.getItem("taskEdit")) || {};
 
-        savedTasks.forEach((task, index) => {
+        savedTasks.forEach((task, i) => {
           const li = document.createElement("li");
           li.className = "flex flex-col bg-gray-100 p-4 rounded";
 
-          // Top row: checkbox, time display/input, Edit button
           const topRow = document.createElement("div");
           topRow.className = "flex items-center gap-3";
 
           const checkbox = document.createElement("input");
           checkbox.type = "checkbox";
-          checkbox.checked = checkedState[index] || false;
+          checkbox.checked = checkedState[i] || false;
           checkbox.className = "w-5 h-5 cursor-pointer";
           checkbox.onchange = () => {
-            checkedState[index] = checkbox.checked;
+            checkedState[i] = checkbox.checked;
             localStorage.setItem("taskChecked", JSON.stringify(checkedState));
             updateTotal();
           };
 
-          // Time display/input container
           const timeContainer = document.createElement("div");
           timeContainer.className = "flex items-center gap-1 flex-1";
 
-          // Amount display/input container
           const amountContainer = document.createElement("div");
           amountContainer.className =
             "flex items-center gap-2 justify-end min-w-[140px]";
 
-          // Edit button
           const editBtn = document.createElement("button");
           editBtn.className =
             "ml-2 px-2 py-1 text-xs bg-blue-400 text-white rounded hover:bg-blue-600";
-          editBtn.textContent = editState[index] ? "Save" : "Edit";
+          editBtn.textContent = editState[i] ? "Save" : "Edit";
 
-          // Time element (text or input)
-          let timeElem;
-          if (editState[index]) {
-            timeElem = document.createElement("input");
-            timeElem.type = "text";
-            timeElem.value = task.time;
+          // let timeElem = editState[i]
+          //   ? document.createElement("input")
+          //   : document.createElement("span");
+          // if (editState[i]) {
+          //   timeElem.type = "text";
+          //   timeElem.value = task.time;
+          //   timeElem.className =
+          //     "border border-gray-400 rounded px-2 py-1 w-full text-sm";
+          //   timeElem.oninput = () => {
+          //     task.time = timeElem.value;
+          //     saveTasksToStorage(savedTasks);
+          //   };
+          // } else {
+          //   timeElem.textContent = task.time;
+          //   timeElem.className = "text-gray-800";
+          // }
+
+          let timeElem = editState[i]
+            ? document.createElement("input")
+            : document.createElement("span");
+          if (editState[i]) {
+            timeElem.type = "time";
             timeElem.className =
-              "border border-gray-400 rounded px-2 py-1 w-full text-sm";
+              "border border-gray-400 rounded px-2 py-1 text-sm";
+
+            // Try to parse HH:MM from task.time (e.g., "9:00 AM" → "09:00")
+            const match = task.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+            if (match) {
+              let hour = parseInt(match[1], 10);
+              const minute = match[2];
+              const period = match[3];
+              if (period && period.toUpperCase() === "PM" && hour !== 12)
+                hour += 12;
+              if (period && period.toUpperCase() === "AM" && hour === 12)
+                hour = 0;
+              timeElem.value = `${hour.toString().padStart(2, "0")}:${minute}`;
+            }
+
             timeElem.oninput = () => {
-              task.time = timeElem.value;
+              const [h, m] = timeElem.value.split(":");
+              const hour = parseInt(h);
+              const suffix = hour >= 12 ? "PM" : "AM";
+              const displayHour = ((hour + 11) % 12) + 1; // convert 0–23 to 1–12
+              task.time = `${displayHour}:${m} ${suffix}`;
               saveTasksToStorage(savedTasks);
             };
           } else {
-            timeElem = document.createElement("span");
             timeElem.textContent = task.time;
             timeElem.className = "text-gray-800";
           }
+
           timeContainer.appendChild(timeElem);
 
-          // Amount element (text or input)
-          let amountElem;
-          if (editState[index]) {
-            amountElem = document.createElement("input");
+          let amountElem = editState[i]
+            ? document.createElement("input")
+            : document.createElement("span");
+          if (editState[i]) {
             amountElem.type = "number";
             amountElem.min = "0";
             amountElem.value = task.amountMl;
@@ -189,19 +222,11 @@
             amountElem.oninput = () => {
               const oldVal = task.amountMl;
               const newVal = parseInt(amountElem.value) || 0;
-              if (checkedState[index]) {
-                // Adjust total with diff
-                const diff = newVal - oldVal;
-                task.amountMl = newVal;
-                saveTasksToStorage(savedTasks);
-                updateTotal(diff, index);
-              } else {
-                task.amountMl = newVal;
-                saveTasksToStorage(savedTasks);
-              }
+              task.amountMl = newVal;
+              saveTasksToStorage(savedTasks);
+              if (checkedState[i]) updateTotal();
             };
           } else {
-            amountElem = document.createElement("span");
             amountElem.textContent = `${task.amountMl} ml / ${mlToOz(
               task.amountMl
             )} oz`;
@@ -209,97 +234,41 @@
           }
           amountContainer.appendChild(amountElem);
 
-          // Edit button click toggles edit mode
           editBtn.onclick = () => {
-            editState[index] = !editState[index];
+            editState[i] = !editState[i];
             localStorage.setItem("taskEdit", JSON.stringify(editState));
+            saveTasksToStorage(savedTasks);
             loadTasks();
           };
 
           topRow.append(checkbox, timeContainer, editBtn);
-          li.append(topRow);
-          li.append(amountContainer);
+          li.append(topRow, amountContainer);
           taskList.appendChild(li);
         });
-
         updateTotal();
       }
 
-      ////weight code starts here
-
-      const weightInput = document.getElementById("baby-weight");
-      const weightDisplay = document.getElementById("weight-display");
-      const editWeightBtn = document.getElementById("edit-weight-btn");
-
-      // Load saved weight
-      let savedWeight = localStorage.getItem("babyWeight");
-      if (savedWeight) {
-        weightDisplay.textContent = savedWeight;
-        weightInput.value = savedWeight;
-      }
-
-      // Toggle edit mode
-      editWeightBtn.addEventListener("click", () => {
-        if (weightInput.classList.contains("hidden")) {
-          // Enter edit mode
-          weightInput.classList.remove("hidden");
-          weightDisplay.classList.add("hidden");
-          editWeightBtn.innerHTML = "💾";
-          editWeightBtn.title = "Save";
-          weightInput.focus();
-        } else {
-          // Save and exit edit mode
-          const newWeight = weightInput.value;
-          localStorage.setItem("babyWeight", newWeight);
-          weightDisplay.textContent = newWeight;
-          weightInput.classList.add("hidden");
-          weightDisplay.classList.remove("hidden");
-          editWeightBtn.innerHTML = "✏️";
-          editWeightBtn.title = "Edit";
-        }
-      });
-
-      ////weight code ends here
-
-      // Convert ml to oz rounded to 1 decimal
       function mlToOz(ml) {
         return (ml * 0.033814).toFixed(1);
       }
 
-      // Update total pumped amount; diff used for optimization (optional)
-      function updateTotal(diff = null, changedIndex = null) {
+      function updateTotal() {
         const tasks = JSON.parse(localStorage.getItem("tasks")) || defaultTasks;
         const checkedState =
           JSON.parse(localStorage.getItem("taskChecked")) || {};
 
-        // If diff is passed, adjust total by diff
-        if (diff !== null && changedIndex !== null) {
-          let currentTotal =
-            parseInt(localStorage.getItem("totalAmountMl")) || 0;
-          currentTotal += diff;
-          if (currentTotal < 0) currentTotal = 0;
-          localStorage.setItem("totalAmountMl", currentTotal);
-          displayTotal(currentTotal);
-          return;
-        }
-
-        // Else recalc total from scratch
         let totalMl = 0;
         tasks.forEach((task, i) => {
-          if (checkedState[i]) totalMl += task.amountMl || 0;
+          if (checkedState[i]) totalMl += task.amountMl;
         });
+
         localStorage.setItem("totalAmountMl", totalMl);
-        displayTotal(totalMl);
-      }
-
-      function displayTotal(totalMl) {
         totalAmountEl.textContent = `${totalMl} ml / ${mlToOz(totalMl)} oz`;
-        let percent = (totalMl / maxTotalMl) * 100;
-        if (percent > 100) percent = 100;
-        progressBar.style.width = percent + "%";
+        const pct = Math.min((totalMl / maxTotalMl) * 100, 100);
+        progressBar.style.width = pct + "%";
       }
 
-      // Reset all to default and clear checks and edits
+      // Reset button
       resetBtn.addEventListener("click", () => {
         localStorage.removeItem("tasks");
         localStorage.removeItem("taskChecked");
@@ -308,7 +277,29 @@
         loadTasks();
       });
 
-      // Initial load
+      // Weight edit/save
+      const storedWeight = localStorage.getItem("babyWeight");
+      if (storedWeight) {
+        weightDisplay.textContent = storedWeight;
+        weightInput.value = storedWeight;
+      }
+
+      editWeightBtn.addEventListener("click", () => {
+        if (weightInput.classList.contains("hidden")) {
+          weightInput.classList.remove("hidden");
+          weightDisplay.classList.add("hidden");
+          editWeightBtn.textContent = "💾";
+          weightInput.focus();
+        } else {
+          localStorage.setItem("babyWeight", weightInput.value);
+          weightDisplay.textContent = weightInput.value;
+          weightInput.classList.add("hidden");
+          weightDisplay.classList.remove("hidden");
+          editWeightBtn.textContent = "✏️";
+        }
+      });
+
+      // Kick everything off
       loadTasks();
     </script>
   </body>
